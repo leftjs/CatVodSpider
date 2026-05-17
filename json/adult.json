@@ -1,5 +1,5 @@
 {
-  "spider": "https://raw.githubusercontent.com/leftjs/CatVodSpider/main/jar/custom_spider.jar;md5;bf3ea94f6a66750e6bc404ee54622c3d",
+  "spider": "https://raw.githubusercontent.com/leftjs/CatVodSpider/main/jar/custom_spider.jar;md5;747b7020dfc2a22f54a8a4e613984185",
   "wallpaper": "https://gao.chuqiuyu.tk",
   "sites": [
     {
@@ -36,6 +36,13 @@
       "categories": [
         "伦理片"
       ]
+    },
+    {
+      "key": "FreeJavBT",
+      "name": "FreeJavBT",
+      "type": 3,
+      "api": "csp_FreeJavBT",
+      "searchable": 1
     },
     {
       "key": "非凡",
