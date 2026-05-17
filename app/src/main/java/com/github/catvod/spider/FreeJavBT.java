@@ -202,18 +202,6 @@ public class FreeJavBT extends Spider {
         return magnets;
     }
 
-    /**
-     * 检测视频详情页有没有 m3u8（用于判断能否在线播放）
-     */
-    private boolean hasM3u8(String vid) {
-        try {
-            String html = OkHttp.string(homeUrl + "/" + vid, getHeaders());
-            return !extractM3u8Sources(html).isEmpty();
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     private List<Vod> parseVideoList(Document doc) {
         List<Vod> list = new ArrayList<>();
         for (Element item : doc.select("div.video-list-item")) {
@@ -235,12 +223,6 @@ public class FreeJavBT extends Spider {
 
             // 过滤广告
             if (!id.matches("^[A-Z]+-.+")) continue;
-
-            // 无 m3u8 只能磁力播放的，加上 [磁力] 角标
-            if (!hasM3u8(id)) {
-                name = name + " [磁力]";
-            }
-
             list.add(new Vod(id, name, pic));
         }
         return list;
