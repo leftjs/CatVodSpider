@@ -22,6 +22,7 @@ import java.util.List;
 public class Miss extends Spider {
 
     private final String url = "https://missav.ws/";
+    private static final long TIMEOUT = 30000L;
 
     private HashMap<String, String> getHeaders() {
         HashMap<String, String> headers = new HashMap<>();
@@ -42,7 +43,7 @@ public class Miss extends Spider {
         List<Class> classes = new ArrayList<>();
         LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
 
-        Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
+        Document doc = Jsoup.parse(OkHttp.string(url, null, getHeaders(), TIMEOUT));
 
         // Parse categories from nav submenu items
         for (Element a : doc.select("nav a.text-nord0")) {
@@ -81,7 +82,7 @@ public class Miss extends Spider {
             target += "?filters=" + filters + "&page=" + pg;
         }
 
-        Document doc = Jsoup.parse(OkHttp.string(target, getHeaders()));
+        Document doc = Jsoup.parse(OkHttp.string(target, null, getHeaders(), TIMEOUT));
         for (Element card : doc.select("div.thumbnail")) {
             Vod vod = parseVideoCard(card);
             if (vod != null) list.add(vod);
@@ -91,7 +92,7 @@ public class Miss extends Spider {
 
     @Override
     public String detailContent(List<String> ids) throws Exception {
-        Document doc = Jsoup.parse(OkHttp.string(url + ids.get(0), getHeaders()));
+        Document doc = Jsoup.parse(OkHttp.string(url + ids.get(0), null, getHeaders(), TIMEOUT));
         String name = doc.select("meta[property=og:title]").attr("content");
         String pic = doc.select("meta[property=og:image]").attr("content");
         Vod vod = new Vod();
@@ -106,7 +107,7 @@ public class Miss extends Spider {
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
         List<Vod> list = new ArrayList<>();
-        Document doc = Jsoup.parse(OkHttp.string(url + "search/" + key, getHeaders()));
+        Document doc = Jsoup.parse(OkHttp.string(url + "search/" + key, null, getHeaders(), TIMEOUT));
         for (Element card : doc.select("div.thumbnail")) {
             Vod vod = parseVideoCard(card);
             if (vod != null) list.add(vod);
