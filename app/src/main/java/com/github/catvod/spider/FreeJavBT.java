@@ -11,6 +11,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -67,46 +68,33 @@ public class FreeJavBT extends Spider {
         String html = OkHttp.string(homeUrl + "/" + ids.get(0), getHeaders());
         Document doc = Jsoup.parse(html);
 
+        // 标题
         String name = "";
         Element h1 = doc.selectFirst("h1");
         if (h1 != null) {
             name = h1.text().replace(" 免费AV在线看", "").replace(" FREE JAV BT", "").trim();
         }
 
+        // 封面
         String pic = "";
         Element ogImg = doc.selectFirst("meta[property=og:image]");
         if (ogImg != null) pic = ogImg.attr("content");
 
-        String m3u8 = "";
-        // 方法1: <video src="xxx.m3u8">
-        Element video = doc.selectFirst("video#player");
-        if (video != null) {
-            m3u8 = video.attr("src");
-        }
-        // 方法2: data-m3u8 属性
-        if (m3u8.isEmpty()) {
-            Element m3u8El = doc.selectFirst("[data-m3u8]");
-            if (m3u8El != null) m3u8 = m3u8El.attr("data-m3u8");
-        }
-        // 方法3: 正则找
-        if (m3u8.isEmpty()) {
-            Matcher mm = Pattern.compile("(https://[^\\s\"']+\\.m3u8[^\\s\"']*)").matcher(html);
-            if (mm.find()) m3u8 = mm.group(1);
-        }
+        // 播放源：格式 "源名$URL#源名2$URL2"
+        String playUrl = buildPlayUrl(html, ids.get(0));
 
         Vod vod = new Vod();
         vod.setVodId(ids.get(0));
         vod.setVodName(name);
         vod.setVodPic(pic);
         vod.setVodPlayFrom("FreeJavBT");
-        vod.setVodPlayUrl("播放$" + m3u8);
+        vod.setVodPlayUrl(playUrl);
         return Result.string(vod);
     }
 
     @Override
     public String searchContent(String key, boolean quick) {
-        // 简单搜索：URL = /searchq/{keyword}
-        String html = OkHttp.string(homeUrl + "/searchq/" + key, getHeaders());
+        String html = OkHttp.string(homeUrl + "/searchq/" + URLEncoder.encode(key), getHeaders());
         Document doc = Jsoup.parse(html);
         List<Vod> list = parseVideoList(doc);
         return Result.string(list);
@@ -114,29 +102,126 @@ public class FreeJavBT extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        return Result.get().url(id).header(getHeaders()).string();
+        // id 格式: 原始番号|m3u8_url 或 原始番号|magnet_url
+        // flag: "播放" / "备用" 等，和 vodPlayUrl 里的 $ 前面的名字对应
+        String[] parts = id.split("\\|", 2);
+        String url = parts.length > 1 ? parts[1] : id;
+        return Result.get().url(url).header(getHeaders()).string();
+    }
+
+    // ============ 核心解析方法 ============
+
+    /**
+     * 构建播放URL字符串
+     * 优先级: m3u8直链 > 多线路m3u8 > 磁力链
+     * 格式: "播放$m3u8_url#备用$magnet_or_iframe_url"
+     */
+    private String buildPlayUrl(String html, String vid) {
+        List<String[]> sources = new ArrayList<>();
+
+        // 1. 找所有 m3u8 直链（来自 <video src> 或 <div data-m3u8>）
+        List<String> m3u8s = extractM3u8Sources(html);
+        if (!m3u8s.isEmpty()) {
+            for (int i = 0; i < m3u8s.size(); i++) {
+                String srcName = m3u8s.size() == 1 ? "播放" : ("播放" + (i + 1));
+                sources.add(new String[]{srcName, m3u8s.get(i)});
+            }
+        }
+
+        // 2. 如果没有 m3u8，尝试找磁力链
+        if (sources.isEmpty()) {
+            List<String> magnets = extractMagnets(html);
+            if (!magnets.isEmpty()) {
+                // 取第一个磁力链（去掉 &amp; 转义）
+                String magnet = magnets.get(0).replace("&amp;", "&");
+                sources.add(new String[]{"播放", magnet});
+            }
+        }
+
+        // 3. 组合成 TVBox 格式: 播放$m3u8_url#备用$magnet_url
+        if (sources.isEmpty()) {
+            // 完全没有可用源，返回空（会显示无法播放）
+            return "播放$" + vid;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < sources.size(); i++) {
+            if (i > 0) sb.append("#");
+            sb.append(sources.get(i)[0]).append("$").append(sources.get(i)[1]);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 从页面提取所有 m3u8 源
+     * 优先从 visible 的 <video src> 取，其次从隐藏 tab-content 的 data-m3u8 取
+     */
+    private List<String> extractM3u8Sources(String html) {
+        List<String> m3u8s = new ArrayList<>();
+
+        // 方法1: <video src="xxx.m3u8">
+        Pattern vp = Pattern.compile("<video[^>]+src\\s*=\\s*\"([^\"]+\\.m3u8[^\"]*)\"", Pattern.CASE_INSENSITIVE);
+        Matcher vm = vp.matcher(html);
+        while (vm.find()) {
+            String u = vm.group(1).trim();
+            if (!u.contains("vod.jpg")) m3u8s.add(u);
+        }
+
+        // 方法2: data-m3u8 属性（hidden tab-content 里的备用线路）
+        Pattern dp = Pattern.compile("data-m3u8\\s*=\\s*\"([^\"]+\\.m3u8[^\"]*)\"", Pattern.CASE_INSENSITIVE);
+        Matcher dm = dp.matcher(html);
+        while (dm.find()) {
+            String u = dm.group(1).trim();
+            if (!u.contains("vod.jpg") && !m3u8s.contains(u)) m3u8s.add(u);
+        }
+
+        // 方法3: 正则后备（防止有 m3u8 但上面都没匹配到）
+        if (m3u8s.isEmpty()) {
+            Pattern fp = Pattern.compile("(https://[^\\s\"'<>]+\\.m3u8[^\\s\"'<>]*)", Pattern.CASE_INSENSITIVE);
+            Matcher fm = fp.matcher(html);
+            while (fm.find()) {
+                String u = fm.group(1).trim();
+                if (!u.contains("vod.jpg") && !m3u8s.contains(u)) m3u8s.add(u);
+            }
+        }
+
+        return m3u8s;
+    }
+
+    /**
+     * 从页面提取磁力链
+     */
+    private List<String> extractMagnets(String html) {
+        List<String> magnets = new ArrayList<>();
+        Pattern p = Pattern.compile("magnet:\\?xt=urn:btih:([a-fA-F0-9]{40})", Pattern.CASE_INSENSITIVE);
+        Matcher m = p.matcher(html);
+        while (m.find()) {
+            String btih = m.group(1).toLowerCase();
+            magnets.add("magnet:?xt=urn:btih:" + btih);
+        }
+        return magnets;
     }
 
     private List<Vod> parseVideoList(Document doc) {
         List<Vod> list = new ArrayList<>();
-        // 实际结构: <div class="video-list-item col-6 col-sm-4 col-md-3">
         for (Element item : doc.select("div.video-list-item")) {
             Element a = item.selectFirst("a[href^='" + homeUrl + "/']");
             if (a == null) continue;
             String url = a.attr("href");
-            // 提取番号作为ID: /zh/ADN-764 -> ADN-764
             String id = url.substring(homeUrl.length() + 1);
-            // 取标题
+            if (id.contains("/")) id = id.split("/")[0];
+
             String name = "";
             Element h5 = item.selectFirst("h5.card-title");
             if (h5 != null) name = h5.text().trim();
             if (name.isEmpty()) continue;
-            // 取封面
+
             String pic = "";
             Element img = item.selectFirst("img[data-src]");
             if (img != null) pic = img.attr("data-src");
             if (pic.startsWith("/")) pic = siteUrl + pic;
-            // 过滤广告（没有番号的）
+
+            // 过滤广告
             if (!id.matches("^[A-Z]+-.+")) continue;
             list.add(new Vod(id, name, pic));
         }
