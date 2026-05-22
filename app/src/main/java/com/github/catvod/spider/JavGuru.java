@@ -93,14 +93,12 @@ public class JavGuru extends Spider {
         int pageNum = Integer.parseInt(pg);
 
         if (tid.equals("date") || tid.isEmpty()) {
-            // Default sort: Recent
             if (pageNum == 1) {
                 url = siteUrl + categoryPath;
             } else {
                 url = siteUrl + categoryPath + "page/" + pageNum + "/";
             }
         } else {
-            // Sort with query params
             if (pageNum == 1) {
                 url = siteUrl + categoryPath + "?orderby=" + tid + "&order=DESC";
             } else {
@@ -159,9 +157,6 @@ public class JavGuru extends Spider {
 
         // Extract all iframe_url Base64 values
         List<String> playUrls = extractPlayUrls(html);
-        if (playUrls.isEmpty()) {
-            playUrls.add(url);
-        }
 
         Vod vod = new Vod();
         vod.setVodId(url);
@@ -169,10 +164,13 @@ public class JavGuru extends Spider {
         vod.setVodPic(pic);
         vod.setVodPlayFrom("JavGuru");
 
-        if (playUrls.size() == 1) {
+        if (playUrls.isEmpty()) {
+            // No extractable sources - return detail URL for iframe playback
+            vod.setVodPlayUrl("播放$" + url);
+        } else if (playUrls.size() == 1) {
             vod.setVodPlayUrl("播放$" + playUrls.get(0));
         } else {
-            // Multiple sources: source1$url1#source2$url2
+            // Multiple sources: 线路1$url1#线路2$url2
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < playUrls.size(); i++) {
                 if (i > 0) sb.append("#");
@@ -186,19 +184,12 @@ public class JavGuru extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // If already a direct m3u8/mp4 URL
+        // If already a direct m3u8/mp4 URL, return as-is
         if (id.contains(".m3u8") || id.contains(".mp4")) {
             return Result.get().url(id).header(getHeaders()).string();
         }
 
-        // If id starts with "http---", it's a direct iframe URL (from multi-source selection)
-        if (id.startsWith("http---")) {
-            String directUrl = id.substring(7); // remove "http---" prefix
-            return Result.get().url(directUrl).header(getHeaders()).string();
-        }
-
-        // Otherwise, id is the detail page URL - fetch and return as parse=1
-        // so CatVod webview loads it and JS executes to get video
+        // Otherwise id is a javclan/jav.guru embed URL - load in webview (JS executes)
         return Result.get().parse().url(id).header(getHeaders()).string();
     }
 
@@ -209,7 +200,7 @@ public class JavGuru extends Spider {
         Document doc = Jsoup.parse(html);
         List<Vod> list = new ArrayList<>();
 
-        Elements articles = doc.select("article.post, .site-content article, div.search-result");
+        Elements articles = doc.select("article.post, .site-content article");
         for (Element article : articles) {
             Element a = article.selectFirst("a[href*='jav.guru/']");
             if (a == null) continue;
@@ -238,13 +229,12 @@ public class JavGuru extends Spider {
     }
 
     /**
-     * Extract all video source URLs from detail page.
+     * Extract all javclan embed URLs from detail page.
      * Each source is stored as a Base64-encoded iframe_url in a JS variable.
-     * The decoded URL is a jav.guru/searcho/ redirect page which loads javclan.com iframe.
+     * Decoding gives a searcho redirect URL which 302s to javclan.com embed.
      *
-     * Returns list of URLs for playerContent.
-     * For each source, we store the detail page URL with http--- prefix so the
-     * CatVod client knows to treat it as an iframe source.
+     * We return the javclan embed URL directly so CatVod webview can load it.
+     * The JWPlayer JS in the page executes and plays the video.
      */
     private List<String> extractPlayUrls(String html) {
         List<String> urls = new ArrayList<>();
@@ -255,10 +245,11 @@ public class JavGuru extends Spider {
                 String b64 = m.group(1);
                 String decoded = new String(Base64.decode(b64, Base64.DEFAULT));
                 if (decoded.contains("jav.guru/searcho")) {
-                    // Store the detail page URL with http--- prefix
-                    // When selected, playerContent will extract this and return as direct iframe URL
-                    // For now, we store the decoded searcho URL which contains xd token
-                    urls.add("http---" + decoded);
+                    // decoded = https://jav.guru/searcho/?xd=TOKEN&bg=THUMB_URL
+                    // We need to follow this redirect to get the javclan URL
+                    // For CatVod parse mode, returning the searcho URL works because
+                    // the webview follows the redirect to javclan automatically
+                    urls.add(decoded);
                 }
             } catch (Exception e) {
                 // Skip invalid Base64
