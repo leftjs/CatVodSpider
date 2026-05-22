@@ -59,28 +59,18 @@ public class JavGuru extends Spider {
         // Fetch default (Recent) page for home video list
         String html = OkHttp.string(siteUrl + categoryPath, getHeaders());
         Document doc = Jsoup.parse(html);
-        Elements articles = doc.select("article.post, .site-content article");
-        for (Element article : articles) {
-            Element a = article.selectFirst("a[href*='jav.guru/']");
+        Elements items = doc.select("div.inside-article");
+        for (Element item : items) {
+            Element a = item.selectFirst("div.grid1 h2 a");
             if (a == null) continue;
-            String url = a.attr("href");
-            if (url.contains("/category/") || url.contains("/tag/") || url.contains("/page/")) continue;
+            String detailUrl = a.attr("href");
+            if (detailUrl.contains("/category/") || detailUrl.contains("/tag/") || detailUrl.contains("/page/")) continue;
 
-            String pic = "";
-            Element img = article.selectFirst("img");
-            if (img != null) {
-                pic = img.attr("src");
-                if (pic.isEmpty()) pic = img.attr("data-src");
-            }
-
+            String pic = item.selectFirst("div.imgg img").attr("src");
             String title = a.text().trim();
-            if (title.isEmpty()) {
-                Element h2 = article.selectFirst("h2, h3");
-                if (h2 != null) title = h2.text().trim();
-            }
             if (title.isEmpty()) continue;
 
-            list.add(new Vod(url, title, pic));
+            list.add(new Vod(detailUrl, title, pic));
         }
 
         return Result.string(classes, list);
@@ -108,25 +98,15 @@ public class JavGuru extends Spider {
 
         String html = OkHttp.string(url, getHeaders());
         Document doc = Jsoup.parse(html);
-        Elements articles = doc.select("article.post, .site-content article");
-        for (Element article : articles) {
-            Element a = article.selectFirst("a[href*='jav.guru/']");
+        Elements items = doc.select("div.inside-article");
+        for (Element item : items) {
+            Element a = item.selectFirst("div.grid1 h2 a");
             if (a == null) continue;
             String detailUrl = a.attr("href");
             if (detailUrl.contains("/category/") || detailUrl.contains("/tag/") || detailUrl.contains("/page/")) continue;
 
-            String pic = "";
-            Element img = article.selectFirst("img");
-            if (img != null) {
-                pic = img.attr("src");
-                if (pic.isEmpty()) pic = img.attr("data-src");
-            }
-
+            String pic = item.selectFirst("div.imgg img").attr("src");
             String title = a.text().trim();
-            if (title.isEmpty()) {
-                Element h2 = article.selectFirst("h2, h3");
-                if (h2 != null) title = h2.text().trim();
-            }
             if (title.isEmpty()) continue;
 
             list.add(new Vod(detailUrl, title, pic));
@@ -200,20 +180,14 @@ public class JavGuru extends Spider {
         Document doc = Jsoup.parse(html);
         List<Vod> list = new ArrayList<>();
 
-        Elements articles = doc.select("article.post, .site-content article");
-        for (Element article : articles) {
-            Element a = article.selectFirst("a[href*='jav.guru/']");
+        Elements items = doc.select("div.inside-article");
+        for (Element item : items) {
+            Element a = item.selectFirst("div.grid1 h2 a");
             if (a == null) continue;
             String detailUrl = a.attr("href");
             if (detailUrl.contains("/category/") || detailUrl.contains("/tag/") || detailUrl.contains("/page/") || detailUrl.contains("/search/")) continue;
 
-            String pic = "";
-            Element img = article.selectFirst("img");
-            if (img != null) {
-                pic = img.attr("src");
-                if (pic.isEmpty()) pic = img.attr("data-src");
-            }
-
+            String pic = item.selectFirst("div.imgg img").attr("src");
             String title = a.text().trim();
             if (title.isEmpty()) continue;
 
