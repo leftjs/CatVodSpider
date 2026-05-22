@@ -125,8 +125,9 @@ vod.setVodActor("演员");             // 可选
 vod.setVodDirector("导演");          // 可选
 vod.setVodContent("简介");           // 可选
 vod.setVodPlayFrom("Jable");        // 必须：播放源名称
-vod.setVodPlayUrl("播放$视频页面URL或直链");
-// 或者组合写法：
+vod.setVodPlayUrl("播放$视频URL");
+// 多源时用 # 分隔每条线路，格式：线路1$URL1#线路2$URL2
+// 或者 new Vod(id, name, pic)                   // 最简
 // new Vod(id, name, pic)                   // 最简
 // new Vod(id, name, pic, remarks)           // 带备注
 // new Vod(id, name, pic, remarks, style)   // 带样式
@@ -175,13 +176,26 @@ headers.put("User-Agent", Util.CHROME);
 headers.put("Referer", "https://referer.com/");
 return Result.get().url("https://example.com/video.m3u8").header(headers).string();
 
-// 方式3：需要解析的页面（播放器会尝试解析）
-return Result.get().parse().url("https://player.example.com/play?id=xxx").string();
+// 方式3：需要 JS 执行的页面（iframe/JS 混淆视频源）
+// 返回页面 URL，CatVod webview 加载页面后 JS 执行生成播放器
+// 适用场景：视频 URL 隐藏在 JS 变量中（如 Base64/混淆 JS）
+return Result.get().parse().url("https://player.example.com/watch?id=xxx").header(headers).string();
 
 // 方式4：指定格式（m3u8/dash/rtsp）
 return Result.get().url(url).m3u8().string();
 return Result.get().url(url).dash().string();
 ```
+
+**parse() 模式适用场景：**
+- 视频 URL 隐藏在 JS 变量中，需要 JS 执行才能生成
+- Base64 编码的 iframe URL
+- Dean Edwards 混淆的 JS
+- 重定向链需要 JS 处理（如 jav.guru → searcho → javclan）
+
+**parse() 模式注意事项：**
+- 返回的 URL 会被 CatVod webview 加载
+- 如果视频源需要特定 Referer，在 header 中提供
+- 如果是 iframe 嵌套，webview 需要支持 iframe（CatVod 支持）
 
 ---
 
