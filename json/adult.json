@@ -1,15 +1,14 @@
 {
-  "spider": "https://raw.githubusercontent.com/leftjs/CatVodSpider/main/jar/custom_spider.jar;md5;5a6ddebb2ecc41711b6cfd74256fccdd",
+  "spider": "https://raw.githubusercontent.com/leftjs/CatVodSpider/main/jar/custom_spider.jar;md5;54758db01ef009d01816aea31faa2e44",
   "wallpaper": "https://gao.chuqiuyu.tk",
   "sites": [
     {
-      "key": "JavGuru",
-      "name": "JavGuru",
+      "key": "JavSB",
+      "name": "JavSB",
       "type": 3,
-      "api": "csp_JavGuru",
+      "api": "csp_JavSB",
       "searchable": 1,
-      "quickSearch": 0,
-      "filterable": 0
+      "filterable": 1
     },
     {
       "key": "AList",
