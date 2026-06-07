@@ -19,6 +19,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Miss extends Spider {
 
@@ -96,13 +98,55 @@ public class Miss extends Spider {
         Document doc = Jsoup.parse(OkHttp.string(url + ids.get(0), null, getHeaders(), TIMEOUT));
         String name = doc.select("meta[property=og:title]").attr("content");
         String pic = doc.select("meta[property=og:image]").attr("content");
+
+        // Extract m3u8 URL from video element
+        String m3u8 = extractM3u8(doc);
+
         Vod vod = new Vod();
         vod.setVodId(ids.get(0));
         vod.setVodPic(pic);
         vod.setVodName(name);
         vod.setVodPlayFrom("MissAV");
-        vod.setVodPlayUrl("播放$" + ids.get(0));
+
+        if (!m3u8.isEmpty()) {
+            vod.setVodPlayUrl("播放$" + m3u8);
+        } else {
+            vod.setVodPlayUrl("播放$" + ids.get(0));
+        }
+
         return Result.string(vod);
+    }
+
+    private String extractM3u8(Document doc) {
+        // Try to find m3u8 URL directly in video.src attribute
+        Element video = doc.selectFirst("video.player");
+        if (video != null) {
+            String src = video.attr("src");
+            if (!TextUtils.isEmpty(src) && src.contains(".m3u8")) {
+                return src;
+            }
+        }
+
+        // Try to find m3u8 URL in script tags with obfuscated code
+        // Pattern: obfuscated code contains URLs like https://surrit.com/{uuid}/{quality}/video.m3u8
+        Pattern m3u8Pattern = Pattern.compile("https://surrit\\.com/[a-f0-9-]+/[a-z0-9]+/video\\.m3u8");
+        for (Element script : doc.select("script")) {
+            String scriptContent = script.html();
+            Matcher m = m3u8Pattern.matcher(scriptContent);
+            if (m.find()) {
+                return m.group();
+            }
+        }
+
+        // Try to find any m3u8 URL in page
+        Pattern anyM3u8 = Pattern.compile("https?://[^\\s\"'<>]+\\.m3u8[^\\s\"'<>]*");
+        String pageText = doc.html();
+        Matcher mm = anyM3u8.matcher(pageText);
+        if (mm.find()) {
+            return mm.group();
+        }
+
+        return "";
     }
 
     @Override
@@ -118,7 +162,17 @@ public class Miss extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        return Result.get().parse().url(url + id).header(getHeaders()).string();
+        // If id contains .m3u8, it's the direct URL
+        if (id.contains(".m3u8")) {
+            return Result.get().url(id).header(getHeaders()).string();
+        }
+        // Otherwise id is the page path, extract m3u8 from it
+        Document doc = Jsoup.parse(OkHttp.string(url + id, null, getHeaders(), TIMEOUT));
+        String m3u8 = extractM3u8(doc);
+        if (!m3u8.isEmpty()) {
+            return Result.get().url(m3u8).header(getHeaders()).string();
+        }
+        return Result.get().url(url + id).header(getHeaders()).string();
     }
 
     private Vod parseVideoCard(Element card) {

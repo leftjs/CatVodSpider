@@ -233,7 +233,6 @@ public class JavSB extends Spider {
         vod.setVodId(vid.replace("-1-1", ""));
         vod.setVodName(name);
         vod.setVodPic(pic);
-        vod.setVodDuration(duration);
         vod.setVodYear(date);
         vod.setVodActor(actress);
 
